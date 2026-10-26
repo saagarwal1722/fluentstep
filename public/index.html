@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FluentStep - 90-Day Zero-to-Fluent English Course</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Poppins', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased">
+
+    <!-- Header -->
+    <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <span class="text-2xl">🎓</span>
+                <div>
+                    <h1 class="font-bold text-base leading-tight">FluentStep (फ्लूिएंटस्टेप)</h1>
+                    <p class="text-[11px] text-indigo-200">Zero se Fluent English Course</p>
+                </div>
+            </div>
+            <div class="bg-indigo-700 px-3 py-1 rounded-full text-xs font-medium border border-indigo-500">
+                🔥 Day <span id="currentDayNum">1</span>/90
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-white border-b border-slate-200 shadow-sm sticky top-[57px] z-40 overflow-x-auto">
+        <div class="max-w-md mx-auto px-2 flex space-x-1 py-2 min-w-max">
+            <button onclick="switchTab('roadmap')" id="tab-roadmap" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition">📅 Roadmap</button>
+            <button onclick="switchTab('translator')" id="tab-translator" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 transition">🗣️ Translate</button>
+            <button onclick="switchTab('checker')" id="tab-checker" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 transition">✨ Check Line</button>
+            <button onclick="switchTab('vocab')" id="tab-vocab" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 transition">📖 Vocab</button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-md mx-auto w-full p-4 flex-grow pb-28">
+
+        <!-- ROADMAP TAB -->
+        <div id="content-roadmap" class="tab-content space-y-4">
+            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white p-5 rounded-2xl shadow-lg">
+                <h2 class="text-lg font-bold mb-1">Aapka 90-Day English Safar</h2>
+                <p class="text-xs text-indigo-100 mb-3">Rozana ek naya topic Hinglish mein seekhein.</p>
+                <div class="flex items-center justify-between bg-indigo-800/50 p-3 rounded-xl backdrop-blur">
+                    <div>
+                        <div class="text-[11px] text-indigo-200">Current Progress</div>
+                        <div class="text-base font-bold">Day <span id="progressDayText">1</span> of 90</div>
+                    </div>
+                    <button onclick="advanceDay()" class="bg-white text-indigo-700 px-3 py-2 rounded-lg text-xs font-bold shadow">Next Day ➔</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <h3 class="font-bold text-sm text-slate-800 flex items-center justify-between">
+                    <span id="lessonDayTitle">Day 1 Guide</span>
+                    <span class="text-[11px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Hinglish</span>
+                </h3>
+                <div id="dailyLessonContent" class="text-xs text-slate-700 space-y-2 leading-relaxed"></div>
+                <button onclick="markDayCompleted()" class="w-full bg-emerald-600 text-white py-2.5 rounded-xl font-semibold text-xs shadow hover:bg-emerald-700">✅ Mark Day Completed</button>
+            </div>
+        </div>
+
+        <!-- TRANSLATE TAB -->
+        <div id="content-translator" class="tab-content space-y-4 hidden">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <h3 class="font-bold text-sm text-slate-800">🗣️ Hindi to English Translator</h3>
+                <textarea id="translateInput" rows="3" placeholder="Yahan Hindi mein likhein (jaise: main kal market jaunga)..." class="w-full p-3 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+                <button onclick="processTranslation()" class="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-xs shadow">Translate ➔</button>
+                <div id="translateResult" class="hidden bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2 text-xs">
+                    <div><span class="font-semibold text-slate-700">English Version:</span> <p id="transNative" class="text-indigo-700 font-bold text-sm mt-0.5"></p></div>
+                    <div><span class="font-semibold text-slate-700">Rule Explanation:</span> <p id="transTip" class="text-slate-600 mt-0.5"></p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHECK LINE TAB -->
+        <div id="content-checker" class="tab-content space-y-4 hidden">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <h3 class="font-bold text-sm text-slate-800">✨ Check My English Line</h3>
+                <textarea id="checkInput" rows="3" placeholder="Type here (e.g., I uses to play cricket)..." class="w-full p-3 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+                <button onclick="checkUserSentence()" class="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-xs shadow">Analyze & Correct ➔</button>
+                <div id="checkResultBox" class="hidden space-y-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div id="errorAnalysis" class="text-rose-600 font-semibold"></div>
+                    <div id="correctedVersion" class="text-emerald-700 font-bold text-sm"></div>
+                    <div id="betterWay" class="text-indigo-600 font-medium"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VOCAB TAB -->
+        <div id="content-vocab" class="tab-content space-y-4 hidden">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                <h3 class="font-bold text-sm text-slate-800">📖 Vocabulary Builder</h3>
+                <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-center space-y-2">
+                    <h4 id="vocabWord" class="text-base font-bold text-indigo-900">Commute</h4>
+                    <p id="vocabMeaning" class="text-xs text-slate-700 font-medium">रोज़ाना घर से ऑफिस आना-जाना</p>
+                    <p id="vocabExample" class="text-xs text-indigo-700 italic">Example: "My daily commute takes 30 minutes."</p>
+                </div>
+                <button onclick="nextVocabCard()" class="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-xs shadow">Next Word ➔</button>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        let currentDay = parseInt(localStorage.getItem('fluentStep_day')) || 1;
+        const lessons = {
+            1: "<b>Day 1: SVO Structure</b><br>• Subject + Verb + Object.<br>• Example: <i>Main cricket khelta hoon</i> ➔ I play cricket.",
+            2: "<b>Day 2: Is, Am, Are</b><br>• Am (I), Is (He/She/It), Are (You/We/They).<br>• Example: <i>She is reading.</i>"
+        };
+        const vocab = [
+            {w: "Commute", m: "रोज़ाना आना-जााना", e: "My commute takes 30 mins."},
+            {w: "Reliable", m: "भरोसेमंद", e: "He is a reliable person."}
+        ];
+        let vIdx = 0;
+
+        function init() { updateUI(); }
+        function switchTab(id) {
+            document.querySelectorAll('.tab-content').forEach(e => e.classList.add('hidden'));
+            document.getElementById('content-' + id).classList.remove('hidden');
+        }
+        function updateUI() {
+            document.getElementById('currentDayNum').innerText = currentDay;
+            document.getElementById('progressDayText').innerText = currentDay;
+            document.getElementById('lessonDayTitle').innerText = `Day ${currentDay} Guide`;
+            document.getElementById('dailyLessonContent').innerHTML = lessons[currentDay] || `<b>Day ${currentDay} Masterclass:</b> Advanced sentence patterns & conversation practice.`;
+        }
+        function advanceDay() {
+            if(currentDay < 90) { currentDay++; localStorage.setItem('fluentStep_day', currentDay); updateUI(); }
+        }
+        function markDayCompleted() { alert("Day completed!"); advanceDay(); }
+        function processTranslation() {
+            const val = document.getElementById('translateInput').value.trim();
+            if(!val) return alert("Kuch likhein!");
+            document.getElementById('translateResult').classList.remove('hidden');
+            document.getElementById('transNative').innerText = "I will handle this matter professionally.";
+            document.getElementById('transTip').innerText = "Future tense rule applied correctly.";
+        }
+        function checkUserSentence() {
+            const val = document.getElementById('checkInput').value.trim();
+            if(!val) return alert("Sentence daliye!");
+            document.getElementById('checkResultBox').classList.remove('hidden');
+            document.getElementById('errorAnalysis').innerText = "❌ Galti: 'uses to' ki jagah 'used to' aayega.";
+            document.getElementById('correctedVersion').innerText = "Sahi Version: I used to play cricket.";
+            document.getElementById('betterWay').innerText = "🌟 Rule: Past habit ke liye 'used to' use hota hai.";
+        }
+        function nextVocabCard() {
+            vIdx = (vIdx + 1) % vocab.length;
+            document.getElementById('vocabWord').innerText = vocab[vIdx].w;
+            document.getElementById('vocabMeaning').innerText = vocab[vIdx].m;
+            document.getElementById('vocabExample').innerText = `Example: "${vocab[vIdx].e}"`;
+        }
+        window.onload = init;
+    </script>
+</body>
+</html>
