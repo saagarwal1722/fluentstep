@@ -40,14 +40,21 @@ async function upstream(url,key,options={},timeout=40000){
  throw error;}
  return result;
 }
+function selectModel(models){
+ const supported=models.filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace(/^models\//,''));
+ // Listing a model does not establish free-tier eligibility. Prefer standard text models.
+ const preferred=['gemini-2.5-flash-lite','gemini-2.5-flash'];
+ for(const id of preferred)if(supported.includes(id))return id;
+ const stable=supported.filter(id=>/^gemini-\d+(?:\.\d+)?-flash(?:-lite)?$/.test(id));
+ stable.sort((a,b)=>Number(b.endsWith('-lite'))-Number(a.endsWith('-lite'))||b.localeCompare(a,undefined,{numeric:true}));
+ if(!stable.length)fail(503,'NO_MODEL','No supported standard Flash text model found. AI Studio में उपलब्ध text model जाँचकर GEMINI_MODEL सेट करें।');
+ return stable[0];
+}
 async function model(key){
  const override=process.env.GEMINI_MODEL;if(override){if(!/^[a-zA-Z0-9._-]+$/.test(override))fail(503,'MODEL_CONFIG','GEMINI_MODEL must be a model ID, without a URL.');return override;}
  if(modelCache&&modelCache.until>Date.now())return modelCache.id;
  const data=await upstream('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',key,{},10000);
- const options=(data.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/flash/.test(m.name)&&!/(image|audio|tts|live|native|embedding|vision)/.test(m.name));
- options.sort((a,b)=>{const rank=m=>(/preview|exp/.test(m.name)?20:0)+(/lite/.test(m.name)?2:0);return rank(a)-rank(b)||b.name.localeCompare(a.name,undefined,{numeric:true})});
- if(!options.length)fail(503,'NO_MODEL','No compatible Flash text model is available for this key. Set GEMINI_MODEL in Vercel.');
- const id=options[0].name.replace(/^models\//,'');modelCache={id,until:Date.now()+300000};return id;
+ const id=selectModel(data.models||[]);modelCache={id,until:Date.now()+300000};return id;
 }
 function checkResult(d,x){
  if(!x||typeof x!=='object')fail(502,'FORMAT','AI response format was invalid. Retry.');
@@ -82,3 +89,5 @@ module.exports=async function handler(req,res){
  }catch(e){const status=e instanceof AppError?e.status:(e.name==='TimeoutError'||e.name==='AbortError'?504:502);return res.status(status).json({...(e instanceof AppError?{phase:e.phase,model:e.model,quota:e.quota,retryAfterSeconds:e.retryAfterSeconds}:{}),code:e.code||'CONNECTION',error:e instanceof AppError?e.message:status===504?'Gemini took too long. दोबारा कोशिश करें।':'Could not reach Gemini. फिर कोशिश करें।'});}
 };
 module.exports.validate=validate;module.exports.checkResult=checkResult;
+
+module.exports.selectModel=selectModel;
