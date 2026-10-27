@@ -1,5 +1,6 @@
 const buckets = new Map();
 let modelCache;
+const unavailableModels = new Set();
 class AppError extends Error { constructor(status, code, message) { super(message); this.status=status; this.code=code; } }
 const fail=(status,code,message)=>{throw new AppError(status,code,message)};
 const norm=s=>s.trim().toLowerCase().replace(/\s+/g,' ');
@@ -31,7 +32,7 @@ function instructions(d){
 async function upstream(url,key,options={},timeout=40000){
  const r=await fetch(url,{...options,headers:{'Content-Type':'application/json','x-goog-api-key':key},signal:AbortSignal.timeout(timeout)});
  let result;try{result=await r.json()}catch{fail(502,'UPSTREAM','Google returned an unreadable response. फिर कोशिश करें।')}
- if(!r.ok){const code=r.status;const reasons={400:'Google rejected the request. Key restrictions, model configuration या request settings जाँचें।',401:'Google did not accept the server API key.',403:'Google denied access. AI Studio में key permissions और project access जाँचें।',404:'Configured Gemini model is unavailable. GEMINI_MODEL बदलें या हटाएँ।',429:'Gemini quota/rate limit reached. थोड़ी देर बाद कोशिश करें; AI Studio में quota जाँचें।',503:'Gemini is temporarily busy. थोड़ी देर बाद कोशिश करें।'};const error=new AppError(code>=500?503:code,'GOOGLE_'+code,reasons[code]||'Gemini request failed. Status '+code);
+ if(!r.ok){const code=r.status;const reasons={400:'Google rejected the request. Key restrictions, model configuration या request settings जाँचें।',401:'Google did not accept the server API key.',403:'Google denied access. AI Studio में key permissions और project access जाँचें।',404:'Google rejected this model for generation. Connection check में model list और GEMINI_MODEL override जाँचें।',429:'Gemini quota/rate limit reached. थोड़ी देर बाद कोशिश करें; AI Studio में quota जाँचें।',503:'Gemini is temporarily busy. थोड़ी देर बाद कोशिश करें।'};const error=new AppError(code>=500?503:code,'GOOGLE_'+code,reasons[code]||'Gemini request failed. Status '+code);
  const safe=v=>String(v??'').replaceAll(key,'[redacted]').replace(/[^a-zA-Z0-9_./ :()-]/g,'').slice(0,200);
  error.phase=url.includes(':generateContent')?'generation':'model discovery';
  const requested=url.match(/models\/([a-zA-Z0-9._-]+):generateContent/);if(requested)error.model=requested[1];
@@ -40,21 +41,19 @@ async function upstream(url,key,options={},timeout=40000){
  throw error;}
  return result;
 }
-function selectModel(models){
+function selectModel(models, rejected = unavailableModels){
  const supported=models.filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace(/^models\//,''));
  // Listing a model does not establish free-tier eligibility. Prefer standard text models.
- const preferred=['gemini-2.5-flash-lite','gemini-2.5-flash'];
- for(const id of preferred)if(supported.includes(id))return id;
- const stable=supported.filter(id=>/^gemini-\d+(?:\.\d+)?-flash(?:-lite)?$/.test(id));
+ const stable=supported.filter(id=>/^gemini-\d+(?:\.\d+)?-flash(?:-lite)?$/.test(id)&&!rejected.has(id));
  stable.sort((a,b)=>Number(b.endsWith('-lite'))-Number(a.endsWith('-lite'))||b.localeCompare(a,undefined,{numeric:true}));
  if(!stable.length)fail(503,'NO_MODEL','No supported standard Flash text model found. AI Studio में उपलब्ध text model जाँचकर GEMINI_MODEL सेट करें।');
  return stable[0];
 }
 async function model(key){
  const override=process.env.GEMINI_MODEL;if(override){if(!/^[a-zA-Z0-9._-]+$/.test(override))fail(503,'MODEL_CONFIG','GEMINI_MODEL must be a model ID, without a URL.');return override;}
- if(modelCache&&modelCache.until>Date.now())return modelCache.id;
+ if(modelCache&&modelCache.until>Date.now()){modelCache.id=selectModel(modelCache.models);return modelCache.id;}
  const data=await upstream('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',key,{},10000);
- const id=selectModel(data.models||[]);modelCache={id,until:Date.now()+300000};return id;
+ const id=selectModel(data.models||[]);modelCache={id,models:data.models||[],until:Date.now()+300000};return id;
 }
 function checkResult(d,x){
  if(!x||typeof x!=='object')fail(502,'FORMAT','AI response format was invalid. Retry.');
@@ -81,8 +80,18 @@ module.exports=async function handler(req,res){
  let body;try{body=typeof req.body==='string'?JSON.parse(req.body):req.body}catch{fail(400,'JSON','Invalid JSON request.');}
  const d=validate(body);const key=process.env.GEMINI_API_KEY;if(!key)fail(503,'KEY_MISSING','GEMINI_API_KEY is missing in this deployment. Vercel में जोड़कर redeploy करें।');
  const ip=String(req.headers['x-forwarded-for']||'local').split(',')[0];const now=Date.now();for(const [k,v]of buckets){if(v.until<now)buckets.delete(k)}const b=buckets.get(ip)||{count:0,until:now+60000};if(b.count>=12)fail(429,'APP_RATE','Too many requests. एक मिनट बाद कोशिश करें।');b.count++;buckets.set(ip,b);
- const id=await model(key);if(d.task==='status')return res.status(200).json({configured:true,model:id,message:'Key is configured and model discovery succeeded. Send a sentence to test generation.'});
- const result=await upstream(`https://generativelanguage.googleapis.com/v1beta/models/${id}:generateContent`,key,{method:'POST',body:JSON.stringify({systemInstruction:{parts:[{text:guide+'\n'+instructions(d)}]},contents:[{role:'user',parts:[{text:JSON.stringify({input:d.input,word:d.word,exclude:d.exclude,history:d.history})}]}],generationConfig:{responseMimeType:'application/json',temperature:d.task==='quiz'||d.task==='vocab'?.8:.4,maxOutputTokens:d.task==='lesson'?10000:6500}})});
+ let id=await model(key);if(d.task==='status')return res.status(200).json({configured:true,model:id,availableModels:(modelCache?.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace(/^models\//,'')),override:!!process.env.GEMINI_MODEL,message:'Key is configured and model discovery succeeded. Send a sentence to test generation.'});
+ let result;const deadline=Date.now()+44000;
+ for(let attempt=0;attempt<3;attempt++){
+ try{result=await upstream(`https://generativelanguage.googleapis.com/v1beta/models/${id}:generateContent`,key,{method:'POST',body:JSON.stringify({systemInstruction:{parts:[{text:guide+'\n'+instructions(d)}]},contents:[{role:'user',parts:[{text:JSON.stringify({input:d.input,word:d.word,exclude:d.exclude,history:d.history})}]}],generationConfig:{responseMimeType:'application/json',temperature:d.task==='quiz'||d.task==='vocab'?.8:.4,maxOutputTokens:d.task==='lesson'?10000:6500}})},Math.max(1,Math.min(40000,deadline-Date.now())));
+ break;
+ }catch(e){
+ // Fall back only on a 404, never to work around quota or access restrictions.
+ if(e.code!=='GOOGLE_404'||process.env.GEMINI_MODEL||attempt===2)throw e;
+ unavailableModels.add(id);id=await model(key);
+ }
+ }
+
  const candidate=result.candidates?.[0];if(!candidate||candidate.finishReason!=='STOP')fail(502,'INCOMPLETE','AI could not complete the response. No result was saved; retry.');
  let output;try{output=JSON.parse(candidate.content.parts.filter(p=>!p.thought).map(p=>p.text||'').join(''))}catch{fail(502,'FORMAT','AI returned invalid JSON. Retry.');}
  return res.status(200).json({data:checkResult(d,output),model:id});
