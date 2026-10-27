@@ -1,8 +1,1 @@
-{
-  "name": "fluentstep",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "build": "echo 'Building FluentStep static production'"
-  }
-}
+{"name":"fluentstep","version":"2.0.0","private":true,"scripts":{"build":"node scripts/check.cjs","test":"node --test tests/*.test.cjs"},"engines":{"node":">=22"}}
