@@ -31,7 +31,13 @@ function instructions(d){
 async function upstream(url,key,options={},timeout=40000){
  const r=await fetch(url,{...options,headers:{'Content-Type':'application/json','x-goog-api-key':key},signal:AbortSignal.timeout(timeout)});
  let result;try{result=await r.json()}catch{fail(502,'UPSTREAM','Google returned an unreadable response. फिर कोशिश करें।')}
- if(!r.ok){const code=r.status;const reasons={400:'Google rejected the request. Key restrictions, model configuration या request settings जाँचें।',401:'Google did not accept the server API key.',403:'Google denied access. AI Studio में key permissions और project access जाँचें।',404:'Configured Gemini model is unavailable. GEMINI_MODEL बदलें या हटाएँ।',429:'Gemini quota/rate limit reached. थोड़ी देर बाद कोशिश करें; AI Studio में quota जाँचें।',503:'Gemini is temporarily busy. थोड़ी देर बाद कोशिश करें।'};fail(code>=500?503:code,'GOOGLE_'+code,reasons[code]||'Gemini request failed. Status '+code);}
+ if(!r.ok){const code=r.status;const reasons={400:'Google rejected the request. Key restrictions, model configuration या request settings जाँचें।',401:'Google did not accept the server API key.',403:'Google denied access. AI Studio में key permissions और project access जाँचें।',404:'Configured Gemini model is unavailable. GEMINI_MODEL बदलें या हटाएँ।',429:'Gemini quota/rate limit reached. थोड़ी देर बाद कोशिश करें; AI Studio में quota जाँचें।',503:'Gemini is temporarily busy. थोड़ी देर बाद कोशिश करें।'};const error=new AppError(code>=500?503:code,'GOOGLE_'+code,reasons[code]||'Gemini request failed. Status '+code);
+ const safe=v=>String(v??'').replaceAll(key,'[redacted]').replace(/[^a-zA-Z0-9_./ :()-]/g,'').slice(0,200);
+ error.phase=url.includes(':generateContent')?'generation':'model discovery';
+ const requested=url.match(/models\/([a-zA-Z0-9._-]+):generateContent/);if(requested)error.model=requested[1];
+ if(code===429){const details=Array.isArray(result.error?.details)?result.error.details:[];error.quota=details.flatMap(d=>Array.isArray(d.violations)?d.violations:[]).slice(0,5).map(v=>({metric:safe(v.quotaMetric),limit:safe(v.quotaValue),model:safe(v.quotaDimensions?.model),id:safe(v.quotaId)}));
+ const retry=details.find(d=>typeof d.retryDelay==='string')?.retryDelay;if(retry&&/^\d+(\.\d+)?s$/.test(retry))error.retryAfterSeconds=Math.ceil(parseFloat(retry));}
+ throw error;}
  return result;
 }
 async function model(key){
@@ -73,6 +79,6 @@ module.exports=async function handler(req,res){
  const candidate=result.candidates?.[0];if(!candidate||candidate.finishReason!=='STOP')fail(502,'INCOMPLETE','AI could not complete the response. No result was saved; retry.');
  let output;try{output=JSON.parse(candidate.content.parts.filter(p=>!p.thought).map(p=>p.text||'').join(''))}catch{fail(502,'FORMAT','AI returned invalid JSON. Retry.');}
  return res.status(200).json({data:checkResult(d,output),model:id});
- }catch(e){const status=e instanceof AppError?e.status:(e.name==='TimeoutError'||e.name==='AbortError'?504:502);return res.status(status).json({code:e.code||'CONNECTION',error:e instanceof AppError?e.message:status===504?'Gemini took too long. दोबारा कोशिश करें।':'Could not reach Gemini. फिर कोशिश करें।'});}
+ }catch(e){const status=e instanceof AppError?e.status:(e.name==='TimeoutError'||e.name==='AbortError'?504:502);return res.status(status).json({...(e instanceof AppError?{phase:e.phase,model:e.model,quota:e.quota,retryAfterSeconds:e.retryAfterSeconds}:{}),code:e.code||'CONNECTION',error:e instanceof AppError?e.message:status===504?'Gemini took too long. दोबारा कोशिश करें।':'Could not reach Gemini. फिर कोशिश करें।'});}
 };
 module.exports.validate=validate;module.exports.checkResult=checkResult;

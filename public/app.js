@@ -21,7 +21,7 @@ function input(parent,label,key){const id='input-'+key;const l=el('label',label)
 async function api(task,extra={},captured=context()){
  const response=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json',...(accessCode?{'x-app-access-code':accessCode}:{})},body:JSON.stringify({task,...captured,...extra}),signal:AbortSignal.timeout(58000)});
  let data;try{data=await response.json()}catch{throw Error('Server ने JSON नहीं लौटाया। Deployment में /api/ai route उपलब्ध है या नहीं जाँचें।')}
- if(!response.ok)throw Error((data.error||'Request failed')+' ['+(data.code||response.status)+']');return data;
+ if(!response.ok){const details=[data.phase?'Step: '+data.phase:'',data.model?'Model: '+data.model:'',...(data.quota||[]).map(q=>'Quota: '+q.metric+' | Limit: '+q.limit+' | '+q.id+(q.model?' | Model: '+q.model:'')),data.retryAfterSeconds?'Google retry hint: '+data.retryAfterSeconds+' seconds (daily/zero quota may need a different resolution).':''].filter(Boolean).join('\n');throw Error((data.error||'Request failed')+' ['+(data.code||response.status)+']'+(details?'\n'+details:''))}return data;
 }
 async function run(b,fn){if(b.disabled)return;b.disabled=true;const label=b.textContent;b.textContent='कृपया प्रतीक्षा करें…';status('');try{await fn()}catch(e){status(e.name==='TimeoutError'?'Request में अधिक समय लगा। फिर कोशिश करें।':e.message,'error')}finally{b.disabled=false;b.textContent=label}}
 function current(version){return version===revision}
